@@ -206,3 +206,31 @@ class Value:
         out._backward = _backward
         out._grad_fn = '_backward_gelu'
         return out
+
+
+    # Loss Functions 
+    
+    def mse_loss(self, target):
+        """Mean squared error loss."""
+        diff = self - target
+        return diff ** 2
+    
+    def cross_entropy(self, target, epsilon: float = 1e-7):
+        """Cross entropy loss with numerical stability."""
+        p = self.sigmoid()
+        p_clipped = p.clamp(epsilon, 1 - epsilon)
+        loss = -(target * p_clipped.log() + (1 - target) * (1 - p_clipped).log())
+        return loss
+    
+    def hinge_loss(self, target, margin: float = 1.0):
+        """Hinge loss for SVM."""
+        return (margin - target * self).relu()
+    
+    def huber_loss(self, target, delta: float = 1.0):
+        """Huber loss robust to outliers."""
+        diff = self - target
+        abs_diff = diff.abs()
+        if abs_diff.data <= delta:
+            return 0.5 * diff ** 2
+        else:
+            return delta * (abs_diff - 0.5 * delta)
