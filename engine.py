@@ -119,3 +119,90 @@ class Value:
     def __rtruediv__(self, other):
         """Right division for scalar / Value."""
         return other * (self ** -1)
+
+
+    # Activation Functions 
+    
+    def tanh(self):
+        """Hyperbolic tangent activation with caching."""
+        x = self.data
+        t = (math.exp(2*x) - 1) / (math.exp(2*x) + 1)
+        out = Value(t, (self,), 'tanh')
+        
+        def _backward():
+            if self._requires_grad:
+                self.grad += (1 - t**2) * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_tanh'
+        return out
+    
+    def relu(self):
+        """Rectified Linear Unit activation."""
+        out = Value(0.0 if self.data < 0 else self.data, (self,), 'relu')
+        
+        def _backward():
+            if self._requires_grad:
+                self.grad += (1.0 if self.data > 0 else 0.0) * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_relu'
+        return out
+    
+    def leaky_relu(self, alpha: float = 0.01):
+        """Leaky ReLU activation with configurable slope."""
+        out = Value(self.data if self.data > 0 else alpha * self.data, (self,), 'leaky_relu')
+        
+        def _backward():
+            if self._requires_grad:
+                grad_input = 1.0 if self.data > 0 else alpha
+                self.grad += grad_input * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_leaky_relu'
+        return out
+    
+    def sigmoid(self):
+        """Sigmoid activation function."""
+        x = self.data
+        s = 1.0 / (1.0 + math.exp(-x))
+        out = Value(s, (self,), 'sigmoid')
+        
+        def _backward():
+            if self._requires_grad:
+                self.grad += s * (1 - s) * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_sigmoid'
+        return out
+    
+    def elu(self, alpha: float = 1.0):
+        """Exponential Linear Unit activation."""
+        x = self.data
+        out_val = x if x >= 0 else alpha * (math.exp(x) - 1)
+        out = Value(out_val, (self,), 'elu')
+        
+        def _backward():
+            if self._requires_grad:
+                grad_input = 1.0 if x >= 0 else out_val + alpha
+                self.grad += grad_input * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_elu'
+        return out
+    
+    def gelu(self):
+        """Gaussian Error Linear Unit (approximation)."""
+        x = self.data
+        # Approximate GELU: 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
+        c = math.sqrt(2.0 / math.pi)
+        tanh_arg = c * (x + 0.044715 * x**3)
+        gelu_val = 0.5 * x * (1 + math.tanh(tanh_arg))
+        out = Value(gelu_val, (self,), 'gelu')
+        
+        def _backward():
+            if self._requires_grad:
+                # Derivative approximation
+                tanh_val = math.tanh(tanh_arg)
+                sech2 = 1 - tanh_val**2
+                d_tanh = c * (1 + 3 * 0.044715 * x**2)
+                d_gelu = 0.5 * (1 + tanh_val) + 0.5 * x * sech2 * d_tanh
+                self.grad += d_gelu * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_gelu'
+        return out
