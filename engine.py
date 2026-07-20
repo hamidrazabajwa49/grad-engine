@@ -333,3 +333,52 @@ class Value:
         out._backward = _backward
         out._grad_fn = '_backward_batch_norm'
         return out
+
+
+    def detach(self):
+        """Detach value from computation graph."""
+        out = Value(self.data, (), 'detach')
+        out._requires_grad = False
+        out._grad_fn = 'detached'
+        return out
+    
+    def retain_grad(self):
+        """Force retention of gradient for this node."""
+        self._retain_grad = True
+        return self
+    
+    def zero_grad(self):
+        """Reset gradient of this node and all descendants."""
+        visited = set()
+        
+        def _zero_grad(v):
+            if v not in visited:
+                visited.add(v)
+                v.grad = 0.0
+                for child in v._prev:
+                    _zero_grad(child)
+        
+        _zero_grad(self)
+    
+    def backward(self):
+        """Perform reverse-mode automatic differentiation."""
+        topo = []
+        visited = set()
+        
+        def build_topo(v):
+            if v not in visited:
+                visited.add(v)
+                for child in v._prev:
+                    build_topo(child)
+                topo.append(v)
+        
+        build_topo(self)
+        self.grad = 1.0
+        
+        for v in reversed(topo):
+            if v._backward is not None:
+                v._backward()
+            # Clear gradients if not retained
+            if not v._retain_grad and v is not self:
+                # clear to save memory
+                pass
