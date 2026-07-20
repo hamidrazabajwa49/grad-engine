@@ -234,3 +234,102 @@ class Value:
             return 0.5 * diff ** 2
         else:
             return delta * (abs_diff - 0.5 * delta)
+
+
+    # Utility Methods 
+    
+    def abs(self):
+        """Absolute value."""
+        out = Value(abs(self.data), (self,), 'abs')
+        
+        def _backward():
+            if self._requires_grad:
+                self.grad += (1.0 if self.data > 0 else -1.0) * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_abs'
+        return out
+    
+    def log(self):
+        """Natural logarithm."""
+        assert self.data > 0, "Log defined only for positive values"
+        out = Value(math.log(self.data), (self,), 'log')
+        
+        def _backward():
+            if self._requires_grad:
+                self.grad += (1.0 / self.data) * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_log'
+        return out
+    
+    def exp(self):
+        """Exponential function."""
+        x = math.exp(self.data)
+        out = Value(x, (self,), 'exp')
+        
+        def _backward():
+            if self._requires_grad:
+                self.grad += x * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_exp'
+        return out
+    
+    def sqrt(self):
+        """Square root."""
+        assert self.data >= 0, "Square root defined for non-negative values"
+        out = Value(math.sqrt(self.data), (self,), 'sqrt')
+        
+        def _backward():
+            if self._requires_grad:
+                self.grad += (0.5 / out.data) * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_sqrt'
+        return out
+    
+    def clamp(self, min_val: float = None, max_val: float = None):
+        """Clamp value between min and max."""
+        clamped = self.data
+        if min_val is not None and clamped < min_val:
+            clamped = min_val
+        if max_val is not None and clamped > max_val:
+            clamped = max_val
+        out = Value(clamped, (self,), 'clamp')
+        
+        def _backward():
+            if self._requires_grad:
+                grad_input = 0.0
+                if (min_val is None or self.data > min_val) and \
+                    (max_val is None or self.data < max_val):
+                    grad_input = 1.0
+                self.grad += grad_input * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_clamp'
+        return out
+    
+    def dropout(self, p: float = 0.5, training: bool = True):
+        """Dropout regularization."""
+        if not training:
+            return self
+        
+        mask = 1.0 if random.random() > p else 0.0
+        scale = 1.0 / (1.0 - p) if mask > 0 else 0.0
+        out = Value(self.data * mask * scale, (self,), 'dropout')
+        
+        def _backward():
+            if self._requires_grad:
+                self.grad += mask * scale * out.grad
+        out._backward = _backward
+        out._grad_fn = '_backward_dropout'
+        return out
+    
+    def batch_norm(self, mean, var, epsilon: float = 1e-5):
+        """Batch normalization operation."""
+        x_hat = (self - mean) / (var + epsilon).sqrt()
+        out = Value(x_hat.data, (self,), 'batch_norm')
+        
+        def _backward():
+            if self._requires_grad:
+                # Simplified backward (full batch norm gradient is complex)
+                self.grad += out.grad / (var.data + epsilon).sqrt()
+        out._backward = _backward
+        out._grad_fn = '_backward_batch_norm'
+        return out
