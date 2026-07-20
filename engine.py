@@ -382,3 +382,34 @@ class Value:
             if not v._retain_grad and v is not self:
                 # clear to save memory
                 pass
+
+
+    # Operator Overloads for Convenience 
+    
+    def __matmul__(self, other):
+        """Matrix multiplication (for compatibility with higher-level code)."""
+        # For scalars this is just multiplication
+        return self * other
+    
+    def __rmatmul__(self, other):
+        """Right matrix multiplication."""
+        return self * other
+    
+    # Comparison Operators (for debugging)       
+    
+    def __lt__(self, other):
+        return self.data < (other.data if isinstance(other, Value) else other)
+    
+    def __le__(self, other):
+        return self.data <= (other.data if isinstance(other, Value) else other)
+    
+    def __gt__(self, other):
+        return self.data > (other.data if isinstance(other, Value) else other)
+    
+    def __ge__(self, other):
+        return self.data >= (other.data if isinstance(other, Value) else other)
+    
+    def __eq__(self, other):
+        if not isinstance(other, (Value, int, float)):
+            return False
+        return self.data == (other.data if isinstance(other, Value) else other)
