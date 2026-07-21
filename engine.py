@@ -9,7 +9,6 @@ beyond the original micrograd implementation.
 import math
 import random
 from typing import List, Union, Set, Tuple, Optional, Callable
-from functools import lru_cache
 
 class Value:
     """
@@ -42,11 +41,23 @@ class Value:
         
         # Enhanced features
         self._requires_grad = True
-        self._retain_grad = False  # For keeping intermediate gradients
-        self._grad_fn = None  # Reference to gradient function for debugging
-        
+        self._retain_grad = False
+        self._grad_fn = None
+    
+    def __hash__(self):
+        """Make Value hashable so it can be used in sets."""
+        return id(self)
+    
+    def __eq__(self, other):
+        """Equality check based on object identity."""
+        if not isinstance(other, Value):
+            return False
+        return id(self) == id(other)
+    
     def __repr__(self):
         return f"Value(data={self.data:.4f}, grad={self.grad:.4f})"
+
+
     
     # Core Arithmetic Operations 
     
@@ -57,11 +68,11 @@ class Value:
         
         def _backward():
             if self._requires_grad:
-                self.grad += out.grad * 1.0
+                self.grad += out.grad
             if other._requires_grad:
-                other.grad += out.grad * 1.0
+                other.grad += out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_add'
+        out._grad_fn = 'add'
         return out
     
     def __mul__(self, other):
@@ -75,7 +86,7 @@ class Value:
             if other._requires_grad:
                 other.grad += self.data * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_mul'
+        out._grad_fn = 'mul'
         return out
     
     def __pow__(self, other):
@@ -87,7 +98,7 @@ class Value:
             if self._requires_grad:
                 self.grad += other * (self.data ** (other - 1)) * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_pow'
+        out._grad_fn = 'pow'
         return out
     
     def __truediv__(self, other):
@@ -119,8 +130,7 @@ class Value:
     def __rtruediv__(self, other):
         """Right division for scalar / Value."""
         return other * (self ** -1)
-
-
+    
     # Activation Functions 
     
     def tanh(self):
@@ -133,7 +143,7 @@ class Value:
             if self._requires_grad:
                 self.grad += (1 - t**2) * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_tanh'
+        out._grad_fn = 'tanh'
         return out
     
     def relu(self):
@@ -144,7 +154,7 @@ class Value:
             if self._requires_grad:
                 self.grad += (1.0 if self.data > 0 else 0.0) * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_relu'
+        out._grad_fn = 'relu'
         return out
     
     def leaky_relu(self, alpha: float = 0.01):
@@ -156,7 +166,7 @@ class Value:
                 grad_input = 1.0 if self.data > 0 else alpha
                 self.grad += grad_input * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_leaky_relu'
+        out._grad_fn = 'leaky_relu'
         return out
     
     def sigmoid(self):
@@ -169,7 +179,7 @@ class Value:
             if self._requires_grad:
                 self.grad += s * (1 - s) * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_sigmoid'
+        out._grad_fn = 'sigmoid'
         return out
     
     def elu(self, alpha: float = 1.0):
@@ -183,13 +193,12 @@ class Value:
                 grad_input = 1.0 if x >= 0 else out_val + alpha
                 self.grad += grad_input * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_elu'
+        out._grad_fn = 'elu'
         return out
     
     def gelu(self):
         """Gaussian Error Linear Unit (approximation)."""
         x = self.data
-        # Approximate GELU: 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
         c = math.sqrt(2.0 / math.pi)
         tanh_arg = c * (x + 0.044715 * x**3)
         gelu_val = 0.5 * x * (1 + math.tanh(tanh_arg))
@@ -197,14 +206,13 @@ class Value:
         
         def _backward():
             if self._requires_grad:
-                # Derivative approximation
                 tanh_val = math.tanh(tanh_arg)
                 sech2 = 1 - tanh_val**2
                 d_tanh = c * (1 + 3 * 0.044715 * x**2)
                 d_gelu = 0.5 * (1 + tanh_val) + 0.5 * x * sech2 * d_tanh
                 self.grad += d_gelu * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_gelu'
+        out._grad_fn = 'gelu'
         return out
 
 
@@ -246,7 +254,7 @@ class Value:
             if self._requires_grad:
                 self.grad += (1.0 if self.data > 0 else -1.0) * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_abs'
+        out._grad_fn = 'abs'
         return out
     
     def log(self):
@@ -258,7 +266,7 @@ class Value:
             if self._requires_grad:
                 self.grad += (1.0 / self.data) * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_log'
+        out._grad_fn = 'log'
         return out
     
     def exp(self):
@@ -270,7 +278,7 @@ class Value:
             if self._requires_grad:
                 self.grad += x * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_exp'
+        out._grad_fn = 'exp'
         return out
     
     def sqrt(self):
@@ -282,7 +290,7 @@ class Value:
             if self._requires_grad:
                 self.grad += (0.5 / out.data) * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_sqrt'
+        out._grad_fn = 'sqrt'
         return out
     
     def clamp(self, min_val: float = None, max_val: float = None):
@@ -302,7 +310,7 @@ class Value:
                     grad_input = 1.0
                 self.grad += grad_input * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_clamp'
+        out._grad_fn = 'clamp'
         return out
     
     def dropout(self, p: float = 0.5, training: bool = True):
@@ -318,7 +326,7 @@ class Value:
             if self._requires_grad:
                 self.grad += mask * scale * out.grad
         out._backward = _backward
-        out._grad_fn = '_backward_dropout'
+        out._grad_fn = 'dropout'
         return out
     
     def batch_norm(self, mean, var, epsilon: float = 1e-5):
@@ -328,13 +336,14 @@ class Value:
         
         def _backward():
             if self._requires_grad:
-                # Simplified backward (full batch norm gradient is complex)
                 self.grad += out.grad / (var.data + epsilon).sqrt()
         out._backward = _backward
-        out._grad_fn = '_backward_batch_norm'
+        out._grad_fn = 'batch_norm'
         return out
 
 
+    # Advanced Features 
+    
     def detach(self):
         """Detach value from computation graph."""
         out = Value(self.data, (), 'detach')
@@ -378,41 +387,18 @@ class Value:
         for v in reversed(topo):
             if v._backward is not None:
                 v._backward()
-            # Clear gradients if not retained
-            if not v._retain_grad and v is not self:
-                # clear to save memory
-                pass
 
 
     # Operator Overloads for Convenience 
     
     def __matmul__(self, other):
         """Matrix multiplication (for compatibility with higher-level code)."""
-        # For scalars this is just multiplication
         return self * other
     
     def __rmatmul__(self, other):
         """Right matrix multiplication."""
         return self * other
-    
-    # Comparison Operators (for debugging)       
-    
-    def __lt__(self, other):
-        return self.data < (other.data if isinstance(other, Value) else other)
-    
-    def __le__(self, other):
-        return self.data <= (other.data if isinstance(other, Value) else other)
-    
-    def __gt__(self, other):
-        return self.data > (other.data if isinstance(other, Value) else other)
-    
-    def __ge__(self, other):
-        return self.data >= (other.data if isinstance(other, Value) else other)
-    
-    def __eq__(self, other):
-        if not isinstance(other, (Value, int, float)):
-            return False
-        return self.data == (other.data if isinstance(other, Value) else other)
+
 
 
 # Utility Functions 
@@ -430,18 +416,15 @@ def grad_check(func, inputs, epsilon: float = 1e-5, tolerance: float = 1e-6):
     Returns:
         bool: True if gradients match within tolerance
     """
-    # Forward pass
     output = func(inputs)
     output.backward()
     
     all_match = True
     
     for i, inp in enumerate(inputs):
-        # Numerical gradient
         inp_plus = Value(inp.data + epsilon)
         inp_minus = Value(inp.data - epsilon)
         
-        # Create new input list with perturbed value
         inputs_plus = [Value(inp.data) for inp in inputs]
         inputs_minus = [Value(inp.data) for inp in inputs]
         inputs_plus[i] = inp_plus
@@ -451,7 +434,6 @@ def grad_check(func, inputs, epsilon: float = 1e-5, tolerance: float = 1e-6):
         f_minus = func(inputs_minus).data
         num_grad = (f_plus - f_minus) / (2 * epsilon)
         
-        # Compare
         diff = abs(inp.grad - num_grad)
         if diff > tolerance:
             print(f"Gradient mismatch for input {i}:")
@@ -485,3 +467,21 @@ def topo_sort(root: Value) -> List[Value]:
     
     build_topo(root)
     return topo
+
+
+def clone_graph(root: Value) -> Value:
+    """
+    Create a clone of the computation graph.
+    """
+    clone_map = {}
+    
+    def clone_node(v):
+        if v not in clone_map:
+            clone = Value(v.data, (), f"clone_{v._op}")
+            clone_map[v] = clone
+            for child in v._prev:
+                clone_child = clone_node(child)
+                clone._prev.add(clone_child)
+        return clone_map[v]
+    
+    return clone_node(root)
