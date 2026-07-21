@@ -413,3 +413,75 @@ class Value:
         if not isinstance(other, (Value, int, float)):
             return False
         return self.data == (other.data if isinstance(other, Value) else other)
+
+
+# Utility Functions 
+
+def grad_check(func, inputs, epsilon: float = 1e-5, tolerance: float = 1e-6):
+    """
+    Perform gradient checking using central differences.
+    
+    Args:
+        func: Function that takes a list of Values and returns a Value
+        inputs: List of input Values
+        epsilon: Step size for finite differences
+        tolerance: Maximum allowed difference between numerical and analytical
+    
+    Returns:
+        bool: True if gradients match within tolerance
+    """
+    # Forward pass
+    output = func(inputs)
+    output.backward()
+    
+    all_match = True
+    
+    for i, inp in enumerate(inputs):
+        # Numerical gradient
+        inp_plus = Value(inp.data + epsilon)
+        inp_minus = Value(inp.data - epsilon)
+        
+        # Create new input list with perturbed value
+        inputs_plus = [Value(inp.data) for inp in inputs]
+        inputs_minus = [Value(inp.data) for inp in inputs]
+        inputs_plus[i] = inp_plus
+        inputs_minus[i] = inp_minus
+        
+        f_plus = func(inputs_plus).data
+        f_minus = func(inputs_minus).data
+        num_grad = (f_plus - f_minus) / (2 * epsilon)
+        
+        # Compare
+        diff = abs(inp.grad - num_grad)
+        if diff > tolerance:
+            print(f"Gradient mismatch for input {i}:")
+            print(f"  Analytical: {inp.grad:.6f}")
+            print(f"  Numerical:  {num_grad:.6f}")
+            print(f"  Difference: {diff:.6f}")
+            all_match = False
+    
+    return all_match
+
+
+def topo_sort(root: Value) -> List[Value]:
+    """
+    Return topological ordering of all nodes in the computation graph.
+    
+    Args:
+        root: Root Value node
+    
+    Returns:
+        List of Value nodes in topological order
+    """
+    topo = []
+    visited = set()
+    
+    def build_topo(v):
+        if v not in visited:
+            visited.add(v)
+            for child in v._prev:
+                build_topo(child)
+            topo.append(v)
+    
+    build_topo(root)
+    return topo
