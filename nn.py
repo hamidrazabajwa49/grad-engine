@@ -158,3 +158,50 @@ class Neuron(Module):
         
         # Apply activation
         return self._get_activation(weighted_sum)
+
+        def parameters(self) -> List[Value]:
+        """
+        Get all trainable parameters.
+        
+        Returns:
+            List containing weights and bias (if used)
+        """
+        params = self.w.copy()
+        if self.use_bias:
+            params.append(self.b)
+        return params
+    
+    def __repr__(self) -> str:
+        return f"Neuron(nin={self.nin}, activation={self.activation_name})"
+
+
+
+class Layer(Module):
+    """
+    A layer of neurons.
+    
+    A layer applies the same transformation to all inputs using a collection
+    of neurons, each with its own set of weights and bias.
+    
+    Args:
+        nin: Number of input connections
+        nout: Number of neurons in this layer
+        activation: Activation function to use
+        use_bias: Whether to include bias terms
+        weight_init: Weight initialization strategy
+    """
+    
+    def __init__(self, nin: int, nout: int, activation: str = 'tanh',
+                use_bias: bool = True, weight_init: str = 'uniform'):
+        super().__init__()
+        
+        self.nin = nin
+        self.nout = nout
+        self.activation = activation
+        
+        # Create neurons
+        self.neurons = [
+            Neuron(nin, activation=activation, use_bias=use_bias, 
+                    weight_init=weight_init)
+            for _ in range(nout)
+        ]
