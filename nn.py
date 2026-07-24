@@ -205,3 +205,31 @@ class Layer(Module):
                     weight_init=weight_init)
             for _ in range(nout)
         ]
+
+    def __call__(self, x: List[Value]) -> List[Value]:
+        """
+        Forward pass through the layer.
+        
+        Args:
+            x: List of input Values
+        """
+        # Pass input through each neuron
+        return [neuron(x) for neuron in self.neurons]
+    
+    def parameters(self) -> List[Value]:
+        """
+        Get all trainable parameters from all neurons.
+        """
+        params = []
+        for neuron in self.neurons:
+            params.extend(neuron.parameters())
+        return params
+    
+    def _get_children(self) -> List[Module]:
+        """
+        Get child modules (neurons in this layer).
+        """
+        return self.neurons
+    
+    def __repr__(self) -> str:
+        return f"Layer(nin={self.nin}, nout={self.nout}, activation={self.activation})"
