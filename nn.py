@@ -233,3 +233,139 @@ class Layer(Module):
     
     def __repr__(self) -> str:
         return f"Layer(nin={self.nin}, nout={self.nout}, activation={self.activation})"
+
+
+class MLP(Module):
+    """
+    Multi-Layer Perceptron (fully connected neural network).
+    
+    An MLP consists of multiple layers stacked sequentially.
+    Input passes through each layer in order.
+    
+    Args:
+        nin: Number of input features
+        nouts: List of output sizes for each layer
+        (e.g., [16, 16, 1] creates 3 layers)
+        activations: Activation function(s) for each layer
+        Can be a single string or a list per layer
+        use_bias: Whether to include bias terms
+        weight_init: Weight initialization strategy
+        dropout_rate: Dropout probability (0.0 = no dropout)
+    """
+    
+    def __init__(self, nin: int, nouts: List[int], 
+                activation: Union[str, List[str]] = 'tanh',
+                use_bias: bool = True, 
+                weight_init: str = 'uniform',
+                dropout_rate: float = 0.0):
+        super().__init__()
+        
+        self.nin = nin
+        self.nouts = nouts
+        self.dropout_rate = dropout_rate
+        
+        # Handle activation specification
+        if isinstance(activation, str):
+            activations = [activation] * len(nouts)
+        elif isinstance(activation, list):
+            if len(activation) != len(nouts):
+                raise ValueError("Number of activations must match number of layers")
+            activations = activation
+        else:
+            raise TypeError("activation must be str or list of str")
+        
+        # Build layers
+        layer_sizes = [nin] + nouts
+        self.layers = []
+        for i in range(len(nouts)):
+            layer = Layer(
+                nin=layer_sizes[i],
+                nout=layer_sizes[i+1],
+                activation=activations[i],
+                use_bias=use_bias,
+                weight_init=weight_init
+            )
+            self.layers.append(layer)
+    
+    def __call__(self, x: List[Value]) -> Value:
+        """
+        Forward pass through the MLP.
+        """
+        # Pass through each layer
+        current = x
+        for i, layer in enumerate(self.layers):
+            current = layer(current)
+            
+            # Apply dropout between layers (except after last layer)
+            if self.dropout_rate > 0 and self.training and i < len(self.layers) - 1:
+                current = [v.dropout(self.dropout_rate, training=self.training) 
+                        for v in current]
+        
+        # For binary classification, return single Value
+        # If multiple outputs, return list
+        if len(current) == 1:
+            return current[0]
+        else:
+            return current
+    
+    def parameters(self) -> List[Value]:
+        """
+        Get all trainable parameters from all layers.
+        """
+        params = []
+        for layer in self.layers:
+            params.extend(layer.parameters())
+        return params
+    
+    def _get_children(self) -> List[Module]:
+        """
+        Get child modules (layers in this MLP).
+        """
+        return self.layers
+    
+    def layers_info(self) -> List[dict]:
+        """
+        Get information about each layer.
+        """
+        info = []
+        for i, layer in enumerate(self.layers):
+            info.append({
+                'layer': i + 1,
+                'type': 'Linear',
+                'in_features': layer.nin,
+                'out_features': layer.nout,
+                'activation': layer.activation,
+                'parameters': len(layer.parameters())
+            })
+        return info
+    
+    def __repr__(self) -> str:
+        layer_reprs = [repr(layer) for layer in self.layers]
+        layers_str = '\n  ' + '\n  '.join(layer_reprs)
+        return f"MLP(\n  {layers_str}\n)"
+    
+    def summary(self) -> str:
+        """
+        Generate a detailed summary of the model architecture.
+        """
+        total_params = len(self.parameters())
+        
+        lines = [
+            "=" * 60,
+            f"MLP Architecture Summary",
+            "=" * 60,
+            f"Input features: {self.nin}",
+            f"Total layers: {len(self.layers)}",
+            f"Total parameters: {total_params:,}",
+            "-" * 60,
+            "Layer | In  | Out | Activation | Parameters"
+        ]
+        
+        for i, layer in enumerate(self.layers):
+            lines.append(
+                f"  {i+1:2d}  | {layer.nin:3d} | {layer.nout:3d} | "
+                f"{layer.activation:10s} | {len(layer.parameters()):8d}"
+            )
+        
+        lines.append("=" * 60)
+        return "\n".join(lines)
