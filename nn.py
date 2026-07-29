@@ -369,3 +369,52 @@ class MLP(Module):
         
         lines.append("=" * 60)
         return "\n".join(lines)
+
+
+class Sequential(Module):
+    """
+    Sequential container for stacking modules.
+    
+    Similar to MLP but more flexible, allows arbitrary modules
+    (not just linear layers).
+    """
+    
+    def __init__(self, *modules: Module):
+        super().__init__()
+        self.modules = list(modules)
+    
+    def __call__(self, x):
+        """
+        Forward pass through all modules sequentially.
+        """
+        current = x
+        for module in self.modules:
+            current = module(current)
+        return current
+    
+    def parameters(self) -> List[Value]:
+        """
+        Get all parameters from all modules.
+        """
+        params = []
+        for module in self.modules:
+            params.extend(module.parameters())
+        return params
+    
+    def _get_children(self) -> List[Module]:
+        """
+        Get all child modules.
+        """
+        return self.modules
+    
+    def __repr__(self) -> str:
+        module_reprs = [repr(m) for m in self.modules]
+        modules_str = '\n  ' + '\n  '.join(module_reprs)
+        return f"Sequential(\n  {modules_str}\n)"
+    
+    def add_module(self, module: Module):
+        """
+        Add a module to the end of the sequence.
+        """
+        self.modules.append(module)
+        return self
