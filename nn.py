@@ -418,3 +418,53 @@ class Sequential(Module):
         """
         self.modules.append(module)
         return self
+
+
+class Linear(Module):
+    """
+    Simple linear layer (alias for Layer with linear activation).
+    """
+    
+    def __init__(self, nin: int, nout: int, use_bias: bool = True,
+                weight_init: str = 'xavier'):
+        super().__init__()
+        self.layer = Layer(nin, nout, activation='linear', 
+                        use_bias=use_bias, weight_init=weight_init)
+    
+    def __call__(self, x):
+        return self.layer(x)
+    
+    def parameters(self) -> List[Value]:
+        return self.layer.parameters()
+    
+    def _get_children(self) -> List[Module]:
+        return [self.layer]
+    
+    def __repr__(self) -> str:
+        return f"Linear(nin={self.layer.nin}, nout={self.layer.nout})"
+
+
+# Helper Functions 
+
+def xavier_init(nin: int, nout: int, gain: float = 1.0) -> List[Value]:
+    """
+    Xavier/Glorot initialization for weights.
+    
+    Args:
+        nin: Number of input connections
+        nout: Number of output connections
+        gain: Scaling factor (1.0 for tanh, sqrt(2) for ReLU)
+    """
+    std = gain * (2.0 / (nin + nout)) ** 0.5
+    return [Value(random.gauss(0.0, std)) for _ in range(nin)]
+
+
+def he_init(nin: int) -> List[Value]:
+    """
+    He/Kaiming initialization for ReLU weights.
+    
+    Args:
+        nin: Number of input connections
+    """
+    std = (2.0 / nin) ** 0.5
+    return [Value(random.gauss(0.0, std)) for _ in range(nin)]
